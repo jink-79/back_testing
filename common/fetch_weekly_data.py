@@ -1,26 +1,15 @@
 """
 =============================================================
-  SCRIPT 01 — FETCH DATA (WEEKLY)
-  Fetches WEEKLY OHLCV data directly from TradingView for:
-    - RELIANCE  (NSE)
-    - HDFCBANK  (NSE)
-    - TCS       (NSE)
-    - M_M       (NSE)  <- M&M on TradingView
-    - TATASTEEL (NSE)
-    - NIFTY 50  (NSE) — benchmark for Mansfield RS (55-week)
+  SCRIPT 01 — FETCH WEEKLY DATA (ALL F&O STOCKS)
 
-  Output -> data/ folder:
-    RELIANCE_weekly.csv
-    HDFCBANK_weekly.csv
-    TCS_weekly.csv
-    MM_weekly.csv
-    TATASTEEL_weekly.csv
-    NIFTY_weekly.csv
+  Fetches WEEKLY OHLCV data directly from TradingView using tvDatafeed
+  for all F&O symbols (NSE).
 
-  Why weekly directly?
-    Strategy is weekly timeframe. Fetching weekly from TradingView
-    is more accurate than resampling daily data ourselves.
-    Each row = 1 complete trading week (Mon-Fri).
+  Output -> data/weekly/
+    SYMBOL_weekly.csv
+
+  Also generates:
+    data/weekly/failed_symbols.txt
 
   Requirements:
     pip install tradingview-datafeed pandas
@@ -37,32 +26,72 @@ from tvDatafeed import TvDatafeed, Interval
 # CONFIG
 # ──────────────────────────────────────────────
 
-# Add your TradingView credentials for longer history (recommended)
-# Guest access gives only ~100 bars — not enough for backtesting!
-# 100 weekly bars = ~2 years only. With login you get 500+ weeks (~10 years)
 TV_USERNAME = ""
 TV_PASSWORD = ""
 
-# Number of weekly bars to fetch
-# 500 weeks = ~10 years of data — good for backtesting
 BARS = 500
 
-# Output folder
 OUTPUT_DIR = "data/weekly"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+FAILED_LOG_FILE = os.path.join(OUTPUT_DIR, "failed_symbols.txt")
+
 # ──────────────────────────────────────────────
-# STOCKS TO FETCH
+# F&O SYMBOL LIST (YOUR LIST)
 # ──────────────────────────────────────────────
-STOCKS = [
-    {"symbol": "RELIANCE",  "exchange": "NSE", "filename": "RELIANCE_weekly.csv",  "label": "Reliance Industries"},
-    {"symbol": "HDFCBANK",  "exchange": "NSE", "filename": "HDFCBANK_weekly.csv",  "label": "HDFC Bank"},
-    {"symbol": "TCS",       "exchange": "NSE", "filename": "TCS_weekly.csv",       "label": "Tata Consultancy Services"},
-    {"symbol": "M_M",       "exchange": "NSE", "filename": "MM_weekly.csv",        "label": "Mahindra & Mahindra"},
-    {"symbol": "TATASTEEL", "exchange": "NSE", "filename": "TATASTEEL_weekly.csv", "label": "Tata Steel"},
-    # Benchmark — MUST be fetched for Mansfield RS calculation
-    {"symbol": "NIFTY",     "exchange": "NSE", "filename": "NIFTY_weekly.csv",     "label": "Nifty 50 (Benchmark)"},
+FNO_SYMBOLS = [
+    "MPHASIS","BAJAJFINSV","ONGC","BAJFINANCE","OIL","LODHA","COALINDIA","SHREECEM","NMDC",
+    "360ONE","SAIL","CIPLA","WIPRO","NESTLEIND","MANAPPURAM","GMRAIRPORT","LUPIN","CAMS",
+    "SAMMAANCAP","GLENMARK","COLPAL","LTM","HYUNDAI","LICHSGFIN","CGPOWER","ABB","GODREJCP",
+    "SIEMENS","HINDUNILVR","ALKEM","ANGELONE","HEROMOTOCO","APOLLOHOSP","APLAPOLLO",
+    "OBEROIRLTY","ICICIPRULI","INDHOTEL","FORTIS","AXISBANK","ICICIGI","IRFC","DMART",
+    "INDUSTOWER","RECLTD","PAGEIND","DABUR","DIVISLAB","MANKIND","DRREDDY","DLF","VMM",
+    "DALBHARAT","PATANJALI","PERSISTENT","PIDILITIND","POLICYBZR","KPITTECH","PHOENIXLTD",
+    "BAJAJ-AUTO","PNBHOUSING","PIIND","POLYCAB","BOSCHLTD","BAJAJHLDNG","BLUESTARCO",
+    "KALYANKJIL","BRITANNIA","NUVAMA","NBCC","JUBLFOOD","TATACONSUM","NAM-INDIA","NHPC",
+    "NYKAA","TIINDIA","TATAELXSI","TATASTEEL","TITAN","UNOMINDA","TORNTPHARM","SUPREMEIND",
+    "UPL","MARICO","MFSL","MARUTI","MOTHERSON","YESBANK","VBL","VOLTAS","VEDL","ZYDUSLIFE",
+    "RBLBANK","MAZDOCK","BHEL","HDFCAMC","LICI","ITC","EXIDEIND","HAVELLS","IEX","CHOLAFIN",
+    "JSWENERGY","TRENT","CUMMINSIND","POWERINDIA","BANKBARODA","SONACOMS","PFC","MCX",
+    "HCLTECH","TCS","IDEA","SBICARD","INFY","AMBER","COFORGE","LT","BDL","BANDHANBNK",
+    "HDFCLIFE","TECHM","HAL","JSWSTEEL","TMPV","AUBANK","BEL","IDFCFIRSTB","GAIL","IREDA",
+    "FEDERALBNK","INOXWIND","SUNPHARMA","PRESTIGE","SBIN","PETRONET","GODREJPROP",
+    "GODFRYPHLP","AUROPHARMA","PNB","JIOFIN","KEI","CONCOR","POWERGRID","SWIGGY",
+    "MUTHOOTFIN","INDUSINDBK","DIXON","BANKINDIA","COCHINSHIP","RELIANCE","CANBK",
+    "NATIONALUM","EICHERMOT","SBILIFE","SRF","OFSS","CDSL","NTPC","PAYTM","BIOCON",
+    "KAYNES","ADANIPORTS","BHARATFORG","HINDALCO","BSE","ASIANPAINT","TATAPOWER",
+    "ULTRACEMCO","JINDALSTEL","LAURUSLABS","ABCAPITAL","SUZLON","HINDZINC","MOTILALOFS",
+    "LTF","IOC","ASTRAL","RVNL","MAXHEALTH","GRASIM","BPCL","ASHOKLEY","BHARTIARTL","M&M",
+    "NAUKRI","SOLARINDS","ADANIPOWER","ADANIGREEN","ADANIENT","AMBUJACEM","PREMIERENE",
+    "HDFCBANK","UNITDSPR","DELHIVERY","CROMPTON","INDIANB","ETERNAL","UNIONBANK",
+    "SHRIRAMFIN","KOTAKBANK","ICICIBANK","PGEL","TVSMOTOR","HINDPETRO","INDIGO","FORCEMOT",
+    "KFINTECH","WAAREEENER","ADANIENSOL"
 ]
+
+# ──────────────────────────────────────────────
+# TRADINGVIEW SYMBOL OVERRIDES (IMPORTANT)
+# ──────────────────────────────────────────────
+TV_SYMBOL_OVERRIDES = {
+    "M&M": "M_M",  # TradingView special case
+}
+
+# ──────────────────────────────────────────────
+# SYMBOL FORMATTER (GENERAL FIXES)
+# ──────────────────────────────────────────────
+def format_tv_symbol(symbol: str) -> str:
+    """
+    Converts NSE symbol to TradingView compatible format:
+    BAJAJ-AUTO -> BAJAJ_AUTO
+    NAM-INDIA  -> NAM_INDIA
+    M&M        -> M_M (override)
+    """
+    if symbol in TV_SYMBOL_OVERRIDES:
+        return TV_SYMBOL_OVERRIDES[symbol]
+
+    s = symbol.strip().upper()
+    s = s.replace("-", "_")
+    s = s.replace("&", "_")
+    return s
 
 
 # ──────────────────────────────────────────────
@@ -74,153 +103,104 @@ def connect():
         tv = TvDatafeed(TV_USERNAME, TV_PASSWORD)
     else:
         print("Using guest access (no login)")
-        print("  WARNING: Guest mode gives only ~100 weekly bars (~2 years).")
-        print("  TIP: Add TV_USERNAME + TV_PASSWORD for 500 bars (~10 years).\n")
+        print("WARNING: Guest mode gives only ~100 weekly bars (~2 years).")
+        print("TIP: Add TV_USERNAME + TV_PASSWORD for 500 bars (~10 years).\n")
         tv = TvDatafeed()
     return tv
 
 
 # ──────────────────────────────────────────────
-# FETCH ONE STOCK
+# FETCH + SAVE
 # ──────────────────────────────────────────────
-def fetch_and_save(tv, symbol, exchange, filename, label):
-    print(f"Fetching {label} ({symbol}) — Weekly...")
+def fetch_and_save(tv, original_symbol):
+    tv_symbol = format_tv_symbol(original_symbol)
+
+    print(f"Fetching {original_symbol} (TV: {tv_symbol}) — Weekly...")
 
     try:
         df = tv.get_hist(
-            symbol=symbol,
-            exchange=exchange,
-            interval=Interval.in_weekly,   # WEEKLY directly from TradingView
+            symbol=tv_symbol,
+            exchange="NSE",
+            interval=Interval.in_weekly,
             n_bars=BARS
         )
 
         if df is None or df.empty:
-            print(f"  ERROR: No data returned for {symbol}.")
-            print(f"         Double-check symbol name on TradingView.")
-            return None
+            print(f"  ERROR: No data returned for {original_symbol} (TV: {tv_symbol})\n")
+            return False
 
-        # Keep only OHLCV
         df = df[['open', 'high', 'low', 'close', 'volume']].copy()
 
-        # Clean index
         df.index = pd.to_datetime(df.index)
-        df.index.name = 'date'
+        df.index.name = "date"
         df.sort_index(inplace=True)
         df.dropna(inplace=True)
 
-        # Save
+        filename = f"{original_symbol.replace('&','_').replace('-','_')}_weekly.csv"
         filepath = os.path.join(OUTPUT_DIR, filename)
+
         df.to_csv(filepath)
 
         print(f"  OK    : {len(df)} weekly bars fetched")
         print(f"  Range : {df.index[0].date()} to {df.index[-1].date()}")
         print(f"  Saved : {filepath}\n")
 
-        return df
+        return True
 
     except Exception as e:
-        print(f"  ERROR fetching {symbol}: {e}\n")
-        return None
-
-
-# ──────────────────────────────────────────────
-# VALIDATE DATA QUALITY
-# ──────────────────────────────────────────────
-def validate(df, symbol):
-    issues = []
-
-    # Need at least 60 weeks for Mansfield RS (55) + warmup buffer
-    if len(df) < 60:
-        issues.append(f"Only {len(df)} bars — need at least 60 for Mansfield RS (55-week)")
-
-    # Check for large gaps between weeks
-    days_diff = df.index.to_series().diff().dt.days
-    big_gaps = (days_diff > 10).sum()
-    if big_gaps > 0:
-        issues.append(f"{big_gaps} large gaps found (corporate actions / exchange halts)")
-
-    # Zero volume rows
-    zero_vol = (df['volume'] == 0).sum()
-    if zero_vol > 0:
-        issues.append(f"{zero_vol} weeks with zero volume")
-
-    if issues:
-        print(f"  Data quality issues for {symbol}:")
-        for i in issues:
-            print(f"    WARNING: {i}")
-    else:
-        print(f"  Data quality: OK for {symbol}")
-
-
-# ──────────────────────────────────────────────
-# PREVIEW
-# ──────────────────────────────────────────────
-def preview(df, label):
-    print(f"\n--- {label} — Last 3 weekly bars ---")
-    print(df.tail(3).to_string())
-    print()
+        print(f"  ERROR fetching {original_symbol} (TV: {tv_symbol}): {e}\n")
+        return False
 
 
 # ──────────────────────────────────────────────
 # MAIN
 # ──────────────────────────────────────────────
 def main():
-    print("=" * 58)
-    print("  SCRIPT 01 — FETCH WEEKLY DATA")
-    print("  Stocks : RELIANCE, HDFCBANK, TCS, M&M, TATASTEEL")
-    print("  Index  : NIFTY 50 (Mansfield RS Benchmark)")
-    print("  TF     : Weekly (1W) — directly from TradingView")
-    print("=" * 58 + "\n")
+    print("=" * 65)
+    print("  SCRIPT 01 — FETCH WEEKLY DATA (ALL F&O STOCKS)")
+    print("  Exchange : NSE")
+    print("  TF       : Weekly (1W)")
+    print(f"  Bars     : {BARS}")
+    print("=" * 65 + "\n")
 
     tv = connect()
 
-    results = {}
+    failed = []
+    success_count = 0
 
-    for stock in STOCKS:
-        df = fetch_and_save(
-            tv,
-            symbol   = stock["symbol"],
-            exchange = stock["exchange"],
-            filename = stock["filename"],
-            label    = stock["label"],
-        )
-        if df is not None:
-            validate(df, stock["symbol"])
-            print()
-        results[stock["symbol"]] = df
-
-    # ── Summary ──────────────────────────────────────
-    print("\n" + "=" * 58)
-    print("  FETCH SUMMARY")
-    print("=" * 58)
-
-    success, failed = [], []
-    for stock in STOCKS:
-        sym = stock["symbol"]
-        df  = results[sym]
-        if df is not None:
-            success.append(sym)
-            preview(df, stock["label"])
+    for sym in FNO_SYMBOLS:
+        ok = fetch_and_save(tv, sym)
+        if ok:
+            success_count += 1
         else:
             failed.append(sym)
 
-    print(f"Fetched OK : {', '.join(success) if success else 'None'}")
+    # Save failed symbols report
+    if failed:
+        with open(FAILED_LOG_FILE, "w") as f:
+            for s in failed:
+                f.write(s + "\n")
+
+    # Summary
+    print("\n" + "=" * 65)
+    print("  FETCH SUMMARY")
+    print("=" * 65)
+    print(f"Total Symbols : {len(FNO_SYMBOLS)}")
+    print(f"Fetched OK    : {success_count}")
+    print(f"Failed        : {len(failed)}")
 
     if failed:
-        print(f"Failed     : {', '.join(failed)}")
-        print("  -> Check symbol names on TradingView search bar")
-        print("  -> Common issue: M&M is M_M on TradingView")
-    else:
-        print("All 6 weekly files saved in data/ folder.")
+        print("\nFailed symbols saved in:")
+        print(f"  {FAILED_LOG_FILE}")
+        print("\nMost common reasons:")
+        print("  - TradingView symbol mismatch")
+        print("  - Newly listed stocks (less data)")
+        print("  - Wrong exchange mapping")
+        print("  - Symbol requires override like M&M -> M_M")
 
-    print("\nFiles saved:")
-    for stock in STOCKS:
-        if results[stock["symbol"]] is not None:
-            bars = len(results[stock["symbol"]])
-            print(f"  data/{stock['filename']}  ({bars} bars)")
-
-    print("\nNext step: Run 02_strategy.py")
-    print("=" * 58)
+    print("\nAll fetched CSV files saved in:")
+    print(f"  {OUTPUT_DIR}")
+    print("=" * 65)
 
 
 if __name__ == "__main__":
