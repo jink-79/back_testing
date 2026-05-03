@@ -1,0 +1,106 @@
+=============================================================
+  PULSE BREAKER — IDEAS & EXPERIMENTS TRACKER
+  Updated as we go. Each idea has a status tag:
+    [PENDING]  → not yet tested
+    [TESTING]  → currently being built
+    [DONE]     → backtested, results in results/vN/
+    [REJECTED] → tested, did not improve results
+=============================================================
+
+--------------------------------------------------------------
+  VERSION HISTORY
+--------------------------------------------------------------
+v1 (baseline) — weekly — 131 trades, 5 stocks
+  Win Rate  : 56.5%
+  Total P&L : Rs 98,512
+  ROI       : 18.8% on capital deployed
+  Avg Hold  : 6.5 weeks
+  Exit split: Trailing Stop=75  Structure Break=53  Open=3
+
+  Per stock:
+    TATASTEEL : 69.6% WR  Rs 47,907  avg win +11.8%  avg loss -9.8%
+    HDFCBANK  : 63.2% WR  Rs  4,732  avg win  +3.5%  avg loss -4.3%
+    MM        : 52.9% WR  Rs 21,150  avg win  +8.6%  avg loss -6.3%
+    RELIANCE  : 51.7% WR  Rs 15,258  avg win  +8.2%  avg loss -6.0%
+    TCS       : 50.0% WR  Rs  9,465  avg win  +7.7%  avg loss -5.8%
+
+
+--------------------------------------------------------------
+  IDEAS FOR v2 — PARAMETER TWEAKS
+--------------------------------------------------------------
+
+[PENDING] Wider trailing stop offset
+  Change: TRAIL_OFFSET_PCT 2% → 3%
+  Reason: 75 of 131 exits via trailing stop but many cut winners
+          too early (2–4 weeks held). Wider offset lets winners
+          breathe and potentially increases avg win %.
+  Expected impact: Lower trade count, higher avg win, lower win rate.
+  File: weekly/scripts/v2/02_strategy_v2.py
+
+[PENDING] RS slope filter
+  Change: Add condition — Mansfield RS must be rising for 3+
+          consecutive weeks (not just RS > 0 at breakout)
+  Reason: TCS sits at 50% WR — many entries happen when RS
+          is barely positive and flat/falling. A rising RS
+          confirms genuine outperformance momentum.
+  Expected impact: Fewer trades, higher quality entries, better WR.
+  File: weekly/scripts/v2/ or v3/
+
+[PENDING] Minimum breakout range check
+  Change: Skip signals where breakout candle range
+          (high - low) / low < 3%
+  Reason: Tight, choppy breakouts from narrow bases tend to
+          reverse quickly. Most 1–3 week structure break losers
+          likely come from these.
+  Expected impact: Fewer false breakouts, cleaner trade log.
+  File: weekly/scripts/v2/ or v3/
+
+
+--------------------------------------------------------------
+  IDEAS FOR FUTURE VERSIONS
+--------------------------------------------------------------
+
+[PENDING] Volume confirmation filter
+  Change: Require breakout candle volume > 1.2x 10-week avg
+  Reason: Currently logged as observation only. Review vol_ratio
+          column in trade_log — check if high vol_ratio correlates
+          with winning trades.
+  Note: First analyse v1 trade_log vol_ratio before coding this.
+
+[PENDING] EMA trend filter
+  Change: Only take longs when price is above EMA30 or EMA50
+  Reason: Avoid breakouts that happen below key moving averages
+          — these tend to be in downtrending stocks despite
+          Mansfield RS > 0.
+
+[PENDING] Daily timeframe backtest
+  Change: Run same Pulse Breaker rules on daily data
+  Data  : common/data/daily/
+  File  : pulse_breaker/daily/scripts/v1/02_strategy_v1.py
+  Note  : Entry/exit lookback periods will need adjustment
+          (e.g. 5-day breakout instead of 1-week).
+
+[PENDING] Expand stock universe
+  Change: Add more NSE stocks beyond current 5
+  Candidates: BAJFINANCE, ADANIENT, SBIN, ICICIBANK, MARUTI
+  Note: Fetch data first via common/fetch_data.py
+
+
+--------------------------------------------------------------
+  OBSERVATIONS FROM v1 TRADE LOG
+--------------------------------------------------------------
+- HDFCBANK problem: high win rate (63%) but low P&L (Rs 4.7K)
+  because avg win is only 3.5%. Trail is cutting too early.
+  → Wider trail offset likely fixes this.
+
+- TCS problem: exactly 50% WR (coin flip). RS filter is too
+  loose — RS > 0 even when flat is not enough confirmation.
+  → RS slope filter likely improves this.
+
+- TATASTEEL is the best fit for this strategy (high beta
+  cyclical responds well to weekly breakouts).
+  → Consider overweighting in position sizing experiments.
+
+- Most losses are 1–3 week reversals with no trailing activated.
+  These are the false breakouts the slope + range filters
+  should eliminate.

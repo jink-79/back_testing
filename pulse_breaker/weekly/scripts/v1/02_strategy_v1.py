@@ -36,9 +36,20 @@ from pathlib import Path
 # Path to common weekly data folder (relative to this script's location)
 # Script is at: pulse_breaker_strategy_backtest/02_strategy.py
 # Data is at  : backtesting/common/data/weekly/
-SCRIPT_DIR  = Path(__file__).parent
-DATA_DIR    = SCRIPT_DIR.parent / "common" / "data" / "weekly"
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+# go up until "backtesting" folder
+PROJECT_ROOT = SCRIPT_DIR.parents[3]  
+DATA_DIR = PROJECT_ROOT / "common" / "data" / "weekly"
+
 RESULTS_DIR = SCRIPT_DIR / "results"
+RESULTS_DIR.mkdir(exist_ok=True)
+
+print("SCRIPT_DIR   :", SCRIPT_DIR)
+print("PROJECT_ROOT :", PROJECT_ROOT)
+print("DATA_DIR     :", DATA_DIR)
 RESULTS_DIR.mkdir(exist_ok=True)
 
 # ──────────────────────────────────────────────
@@ -61,50 +72,61 @@ STOCKS = {
     "MM":        "MM_weekly.csv",
     "TATASTEEL": "TATASTEEL_weekly.csv",
 }
+# ──────────────────────────────────────────────
+# FILES
+# ──────────────────────────────────────────────
 NIFTY_FILE = "NIFTY_weekly.csv"
-
-
-# ══════════════════════════════════════════════
-# STEP 1 — LOAD DATA
-# ══════════════════════════════════════════════
 
 def load_csv(filepath, name):
     """Load a weekly CSV and return a cleaned DataFrame."""
     if not filepath.exists():
         print(f"  ERROR: File not found — {filepath}")
         return None
+
     df = pd.read_csv(filepath, index_col='date', parse_dates=True)
     df.columns = [c.lower() for c in df.columns]
     df.sort_index(inplace=True)
     df.dropna(inplace=True)
-    print(f"  Loaded {name}: {len(df)} weekly bars  "
+
+    print(f"  Loaded {name}: {len(df)} weekly bars "
           f"({df.index[0].date()} to {df.index[-1].date()})")
+
     return df
 
 
 def load_all():
-    """Load Nifty and all stock CSVs."""
+    """Load Nifty and all stock weekly CSVs automatically."""
     print("\n--- Loading Data ---")
 
+    # Load Nifty
     nifty_path = DATA_DIR / NIFTY_FILE
     nifty = load_csv(nifty_path, "NIFTY")
+
     if nifty is None:
         raise FileNotFoundError(
             f"NIFTY file not found at {nifty_path}\n"
-            "Run 01_fetch_data.py first."
+            "Run weekly fetch script first."
         )
 
+    # Load all weekly stock files
     stocks = {}
-    for name, fname in STOCKS.items():
-        path = DATA_DIR / fname
-        df   = load_csv(path, name)
-        if df is not None:
-            stocks[name] = df
 
-    print(f"\n  Stocks loaded: {list(stocks.keys())}")
+    all_files = list(DATA_DIR.glob("*_weekly.csv"))
+
+    for file in all_files:
+        if file.name.upper() == NIFTY_FILE.upper():
+            continue
+
+        stock_name = file.stem.replace("_weekly", "")   # filename without extension
+        df = load_csv(file, stock_name)
+
+        if df is not None and len(df) >= 60:
+            stocks[stock_name] = df
+        else:
+            print(f"  Skipping {stock_name}: Not enough data (<60 bars)")
+
+    print(f"\n  Total Stocks Loaded: {len(stocks)}")
     return nifty, stocks
-
-
 # ══════════════════════════════════════════════
 # STEP 2 — MANSFIELD RELATIVE STRENGTH
 # ══════════════════════════════════════════════
